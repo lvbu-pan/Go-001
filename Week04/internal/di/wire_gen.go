@@ -7,20 +7,20 @@ package di
 
 import (
 	"context"
-	"database/sql"
 	"github.com/gin-gonic/gin"
-	"github.com/go-redis/redis/v8"
 	"log"
 	"net/http"
 	"time"
 	"week04/api"
+	"week04/internal/biz"
 	"week04/internal/data"
+	"week04/internal/service"
 )
 
 // Injectors from wire.go:
 
-func InitResource() (*App, func(), error) {
-	db, cleanup, err := data.NewDB()
+func InitApp() (*App, func(), error) {
+	db, cleanup, err := data.NewPostgres()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -29,20 +29,50 @@ func InitResource() (*App, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	server, cleanup3, err := NewHttp()
+	serverRepository, cleanup3, err := data.NewDao(db, client)
 	if err != nil {
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
-	app, cleanup4, err := NewApp(db, client, server)
+	cloudServerRepo, cleanup4, err := biz.NewCloudServerRepo(serverRepository)
 	if err != nil {
 		cleanup3()
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
+	cloudService, cleanup5, err := service.NewCloudService(cloudServerRepo)
+	if err != nil {
+		cleanup4()
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	server, cleanup6, err := NewHTTP(cloudService)
+	if err != nil {
+		cleanup5()
+		cleanup4()
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	app, cleanup7, err := NewApp(cloudService, server)
+	if err != nil {
+		cleanup6()
+		cleanup5()
+		cleanup4()
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
 	return app, func() {
+		cleanup7()
+		cleanup6()
+		cleanup5()
 		cleanup4()
 		cleanup3()
 		cleanup2()
@@ -53,41 +83,29 @@ func InitResource() (*App, func(), error) {
 // wire.go:
 
 type App struct {
-	HS *http.Server
-	Db *sql.DB
-	Rd *redis.Client
+	srv *service.CloudService
+	Hs  *http.Server
 }
 
-var Routes = map[string]func(ctx *gin.Context){
-	"/create_asset": api.Hosts,
+func NewApp(cloudService *service.CloudService, hs *http.Server) (*App, func(), error) {
+	app := &App{srv: cloudService, Hs: hs}
+	clean := func() {}
+	return app, clean, nil
 }
 
-func NewHttp() (*http.Server, func(), error) {
-	routes := gin.Default()
-
-	registerRoutes(routes)
-
+func NewHTTP(s api.DemoBMServer) (*http.Server, func(), error) {
+	g := gin.Default()
+	api.RegisterDemoBMServer(g, s)
 	hSrv := &http.Server{
 		Addr:    "127.0.0.1:9999",
-		Handler: routes,
+		Handler: g,
 	}
 	clean := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		if err := hSrv.Shutdown(ctx); err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
 		cancel()
 	}
 	return hSrv, clean, nil
-}
-
-// 注册路由函数
-func registerRoutes(engine *gin.Engine) {
-	for route, fn := range Routes {
-		engine.POST(route, fn)
-	}
-}
-
-func NewApp(d *sql.DB, r *redis.Client, h *http.Server) (*App, func(), error) {
-	return &App{h, d, r}, func() {}, nil
 }

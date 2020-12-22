@@ -2,42 +2,42 @@ package service
 
 import (
 	"context"
-	"database/sql"
-	"errors"
-	"github.com/gin-gonic/gin"
-	"github.com/go-redis/redis/v8"
+	"github.com/google/wire"
+	"github.com/pkg/errors"
+	"log"
+	"week04/api"
 	"week04/internal/biz"
-	"week04/internal/pkg/code"
 )
 
-var (
-	Db *sql.DB
-	Rd *redis.Client
-)
+var Provider = wire.NewSet(NewCloudService, wire.Bind(new(api.DemoBMServer), new(*CloudService)))
 
-type CreateAssetReq struct {
-	Id       string `json:"id"`
-	HostName string `json:"host_name"`
-	Address  string `json:"address"`
-	Port     int    `json:"port"`
-	Cores    int    `json:"cores"`
-	Memory   int    `json:"memory"`
-	DiskSize int    `json:"disk_size"`
-	Region   string `json:"region"`
-	Os       string `json:"os"`
+type CloudService struct {
+	smd *biz.CloudServerRepo
 }
 
-func CreateServer(ctx context.Context, c *gin.Context) {
+func NewCloudService(csu *biz.CloudServerRepo) (*CloudService, func(), error) {
+	return &CloudService{csu}, func() {}, nil
+}
 
-	req := new(CreateAssetReq)
-	if err := c.ShouldBindJSON(req); err != nil {
-		c.JSON(400, map[string]string{"errMsg": "参数格式错误"})
+func (receiver *CloudService) CreateCloudServer(ctx context.Context, cloudServerReq *api.CloudServerReq) (cloudServerReply *api.CloudServerResp) {
+	s := new(biz.ServerSpecs)
+	cloudServerReply = new(api.CloudServerResp)
+	s.HostName = cloudServerReq.HostName
+	s.Port = cloudServerReq.Port
+	s.Cores = cloudServerReq.Cores
+	s.Memory = cloudServerReq.Memory
+	s.DiskSize = cloudServerReq.DiskSize
+	if !receiver.smd.IsValidModel(s.Cores, s.Memory) {
+		cloudServerReply.Message = "传入型号无效"
 		return
 	}
-	result, err := biz.BuyCloudServer(Db, req.Id, req.HostName, req.Address, req.Region, req.Os, req.Port, req.Cores, req.Memory, req.DiskSize)
-	if err != nil && errors.Is(err, code.StoreFail) {
-		c.JSON(200, map[string]string{"errMsg": "购买服务器失败"})
+	result, err := receiver.smd.Create(s)
+	if err != nil {
+		log.Println(errors.Cause(err))
+		cloudServerReply.Message = "购买失败"
+		return
 	}
-	c.JSON(200, result)
+	cloudServerReply.Uuid = result["uuid"]
+	cloudServerReply.Address = result["address"]
 	return
 }

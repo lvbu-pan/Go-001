@@ -4,24 +4,19 @@ import (
 	"context"
 	"fmt"
 	"golang.org/x/sync/errgroup"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"week04/internal/di"
-	"week04/internal/service"
 )
 
 func main() {
-	app, clean, err := di.InitResource()
-	defer clean()
+	app, clean, err := di.InitApp()
+	fmt.Println(err)
 	if err != nil {
-		log.Fatal(err)
+		clean()
+		return
 	}
-
-	service.Db = app.Db
-	service.Rd = app.Rd
-
 	signs := make(chan os.Signal)
 	signal.Notify(signs, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGINT)
 	done := make(chan struct{})
@@ -30,16 +25,16 @@ func main() {
 
 	//启动监听端口
 	g.Go(func() error {
-		return app.HS.ListenAndServe()
+		return app.Hs.ListenAndServe()
 	})
 
 	//停止http服务
 	g.Go(func() error {
 		select {
 		case <-done:
-			return app.HS.Shutdown(context.Background())
+			return app.Hs.Shutdown(context.Background())
 		case <-quickDone:
-			return app.HS.Close()
+			return app.Hs.Close()
 		}
 	})
 
@@ -67,4 +62,5 @@ func main() {
 		close(done)
 		os.Exit(0)
 	}
+
 }
