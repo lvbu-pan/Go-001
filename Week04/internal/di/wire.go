@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"time"
 	"week04/api"
-	"week04/internal/biz"
 	"week04/internal/data"
 	"week04/internal/service"
+	"week04/internal/biz"
 )
 
 type App struct {
@@ -44,6 +44,6 @@ func NewHTTP(s api.DemoBMServer) (*http.Server, func(), error) {
 }
 
 func InitApp() (*App, func(), error) {
-	wire.Build(data.Provider, biz.NewCloudServerRepo, service.Provider, NewHTTP, NewApp)
+	wire.Build(data.Provider, data.NewCloudServerRepo, biz.NewCloudServerRepo, service.Provider, NewHTTP, NewApp)
 	return nil, nil, nil
 }

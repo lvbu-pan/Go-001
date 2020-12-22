@@ -7,7 +7,6 @@ import (
 	"github.com/google/wire"
 	"github.com/jinzhu/gorm"
 	"time"
-	"week04/internal/biz"
 )
 
 import _ "github.com/jinzhu/gorm/dialects/postgres"
@@ -57,7 +56,7 @@ var rc = redisCfg{
 	password: "youknowthat",
 }
 
-func NewDao(db *gorm.DB, client *redis.Client) (biz.ServerRepository, func(), error) {
+func NewDao(db *gorm.DB, client *redis.Client) (*Dao, func(), error) {
 	return &Dao{db, client}, func() {}, nil
 }
 

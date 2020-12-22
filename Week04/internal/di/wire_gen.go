@@ -29,12 +29,13 @@ func InitApp() (*App, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	serverRepository, cleanup3, err := data.NewDao(db, client)
+	dao, cleanup3, err := data.NewDao(db, client)
 	if err != nil {
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
+	serverRepository := data.NewCloudServerRepo(dao)
 	cloudServerRepo, cleanup4, err := biz.NewCloudServerRepo(serverRepository)
 	if err != nil {
 		cleanup3()

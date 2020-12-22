@@ -6,7 +6,7 @@ import (
 	"week04/internal/biz"
 )
 
-var _ biz.ServerRepository = (*Dao)(nil)
+var _ biz.ServerRepository = (*serverRepo)(nil)
 
 type Hosts struct {
 	Id         int32     `gorm:"primary_key;column:id"`
@@ -28,7 +28,15 @@ type Hosts struct {
 	OwnerId    int       `gorm:"column:owner_service_id"`
 }
 
-func (receiver *Dao) SaveServer(s *biz.ServerSpecs) error {
+func NewCloudServerRepo(dao *Dao) biz.ServerRepository {
+	return &serverRepo{dao}
+}
+
+type serverRepo struct {
+	dao *Dao
+}
+
+func (receiver *serverRepo) SaveServer(s *biz.ServerSpecs) error {
 	host := new(Hosts)
 	host.HostName = s.HostName
 	host.Address = s.Address
@@ -38,7 +46,7 @@ func (receiver *Dao) SaveServer(s *biz.ServerSpecs) error {
 	host.AppId = 6
 	host.EnvId = 1
 	host.ServerId = s.UUID
-	if err := receiver.db.Table("conf_hosts").Create(host).Error; err != nil {
+	if err := receiver.dao.db.Table("conf_hosts").Create(host).Error; err != nil {
 		return errors.Wrapf(err, "主机信息存储失败")
 	}
 	return nil
